@@ -117,7 +117,9 @@ class MongoQueue extends DatabaseQueue
             })->get();
 
         foreach ($reserved as $job) {
-            $attempts = $job['attempts'] + 1;
+            //fix bug where all jobs in queue have their attempts increased, even if they weren't attempted:
+            //see: https://github.com/jenssegers/laravel-mongodb/commit/df3ebde0a1f1c784ddb1e8065ee47f43618e0712
+            $attempts = $job['attempts'];
             $this->releaseJob($job['_id'], $attempts);
         }
     }
