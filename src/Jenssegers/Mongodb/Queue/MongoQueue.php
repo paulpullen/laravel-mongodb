@@ -44,9 +44,7 @@ class MongoQueue extends DatabaseQueue
         }
 
         if ($job = $this->getNextAvailableJobAndReserve($queue)) {
-            return new MongoJob(
-                $this->container, $this, $job, $this->connectionName, $queue
-            );
+            return $this->marshalJob($queue, $job);
         }
     }
 
@@ -117,10 +115,7 @@ class MongoQueue extends DatabaseQueue
             })->get();
 
         foreach ($reserved as $job) {
-            //fix bug where all jobs in queue have their attempts increased, even if they weren't attempted:
-            //see: https://github.com/jenssegers/laravel-mongodb/commit/df3ebde0a1f1c784ddb1e8065ee47f43618e0712
-            $attempts = $job['attempts'];
-            $this->releaseJob($job['_id'], $attempts);
+            $this->releaseJob($job['_id']);
         }
     }
 
@@ -128,16 +123,29 @@ class MongoQueue extends DatabaseQueue
      * Release the given job ID from reservation.
      *
      * @param  string $id
-     * @param  int $attempts
      * @return void
      */
-    protected function releaseJob($id, $attempts)
+    protected function releaseJob($id)
     {
         $this->database->table($this->table)->where('_id', $id)->update([
             'reserved' => 0,
             'reserved_at' => null,
-            'attempts' => $attempts,
         ]);
+    }
+
+    protected function marshalJob($queue, $job)
+    {
+        $job->attempts += 1;
+        $this->database->table($this->table)->where('_id', $job->id)->update([
+            'attempts' => $job->attempts
+        ]);
+        return new MongoJob(
+            $this->container,
+            $this,
+            $job,
+            $this->connectionName,
+            $queue
+        );
     }
 
     /**
